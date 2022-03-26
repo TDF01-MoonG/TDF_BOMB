@@ -23,6 +23,8 @@
 #define CLK 2
 #define DIO 3
 
+#define SOUND_MODULE 4
+
 // KeyPad Setting ====================================================================
 const byte rows = 4; //four rows
 const byte cols = 4; //three columns
@@ -41,8 +43,8 @@ LiquidCrystal_I2C lcd(LCD_MODULE,16,2);
 
 static int state = STATE_MAIN;
 static unsigned char time[MAX_TIME_LENGTH];
-static unsigned char password[MAX_PASSWORD_LENGTH];
-static unsigned char confirm[MAX_PASSWORD_LENGTH];
+static char password[MAX_PASSWORD_LENGTH];
+static char confirm[MAX_PASSWORD_LENGTH];
 
 void resetState() {
     memset(time, 0, MAX_TIME_LENGTH);
@@ -57,7 +59,7 @@ int passwordConfirm( char key ) {
         initConfirm = 0;
         return STATE_MAIN;
     } else if ( initConfirm < MAX_PASSWORD_LENGTH ) {
-        confirm[initConfirm] = key - '0';
+        confirm[initConfirm] = key;
         Serial.print("Set confirm: [");
         for ( int i = 0; i < MAX_PASSWORD_LENGTH; ++i ) {
             Serial.print(((String)confirm[i]) + ",");
@@ -72,7 +74,7 @@ int passwordConfirm( char key ) {
         }
 
         initConfirm = 0;
-        return STATE_TIMEBOMB_READY_CONFRIM;
+        return STATE_TIMEBOMB_START_BOMB;
     }
     return state;
 }
@@ -84,7 +86,7 @@ int setPassword( char key ) {
         initPassword = 0;
         return STATE_MAIN;
     } else if ( initPassword < MAX_PASSWORD_LENGTH ) {
-        password[initPassword] = key - '0';
+        password[initPassword] = key;
         Serial.print("Set Password: [");
         for ( int i = 0; i < MAX_PASSWORD_LENGTH; ++i ) {
             Serial.print(((String)password[i]) + ",");
@@ -126,6 +128,7 @@ int setTime( char key ) {
 
 void displayPrint( int state ) {
     lcd.clear();
+    Serial.println( "state : " + (String)state );
     switch (state) {
         case STATE_MAIN:
             lcd.setCursor(0, 0);
@@ -136,28 +139,64 @@ void displayPrint( int state ) {
         
         case STATE_TIMEBOMB_READY_TIME:
             lcd.setCursor(0, 0);
-            lcd.print("SET TIME [#]BACK [*]CLEAR");
+            lcd.print("SET TIME");
             lcd.setCursor(0, 1);
             lcd.print((String)time[0] + (String)time[1] + ":"
             + (String)time[2] + (String)time[3] + ":"
             + (String)time[4] + (String)time[5]);
             break;
-        case STATE_TIMEBOMB_READY_PASSWORD:
+        case STATE_TIMEBOMB_READY_PASSWORD: {
+            String pass = "[";
             lcd.setCursor(0, 0);
-            lcd.print("SET PASSWORD [#]BACK");
+            lcd.print("SET PASSWORD");
             lcd.setCursor(0, 1);
-            lcd.print("[" + (String)((password[0]+'0') + (password[1]+'0') +
-            (password[2]+'0') + (password[3]+'0') +
-            (password[4]+'0') + (password[5]+'0')) + "]");
+            for ( int i = 0; i < MAX_PASSWORD_LENGTH; ++i ) {
+                pass += password[i];
+            }
+            pass += "]";
+            lcd.print(pass);
             break;
-        case STATE_TIMEBOMB_READY_CONFRIM:
+        }
+        case STATE_TIMEBOMB_READY_CONFRIM: {
+            String conf = "[";
             lcd.setCursor(0, 0);
             lcd.print("PASSWORD CONFRIM");
             lcd.setCursor(0, 1);
-            lcd.print("[" + (String)((confirm[0]+'0') + (confirm[1]+'0') +
-            (confirm[2]+'0') + (confirm[3]+'0') +
-            (confirm[4]+'0') + (confirm[5]+'0')) + "]");
+            for ( int i = 0; i < MAX_PASSWORD_LENGTH; ++i ) {
+                conf += confirm[i];
+            }
+            conf += "]";
+            lcd.print(conf);
             break;
+        }
+        case STATE_TIMEBOMB_NO_MATCH_PASSWORD: {
+            lcd.setCursor(0, 0);
+            lcd.print("NO MACH PASSWORD!");
+            delay(2000);
+            state = STATE_MAIN;
+            resetState();
+            break;
+        }
+        case STATE_TIMEBOMB_START_BOMB: {
+            lcd.setCursor(0, 0);
+            lcd.print("READY TO BOMB...");
+            for ( int i = 5; i > 0; --i ) {
+                lcd.setCursor(0, 1);
+                lcd.print( (String)i + "...");
+                delay(1000);
+            }
+            state = STATE_TIMEBOMB_RUN_BOMB;
+            displayPrint( state );
+            break;
+        }
+        case STATE_TIMEBOMB_RUN_BOMB:
+            lcd.setCursor(0, 0);
+            lcd.print("BOMB TO RUNNING.");
+            lcd.setCursor(0, 1);
+            lcd.print("CLEAR TO PASS \"C\" KEY");
+            tone(SOUND_MODULE, 3000);
+            delay(1000);
+            noTone(SOUND_MODULE);
         default:
             break;
     }
@@ -168,7 +207,8 @@ int keyboardScanner( char key ) {
         if ( state == STATE_MAIN ) {
             switch (key) {
                 case '1':
-                    return STATE_TIMEBOMB_READY_TIME;
+                    state = STATE_TIMEBOMB_READY_TIME;
+                    break;
                 default:
                     break;
             }
@@ -183,6 +223,7 @@ int keyboardScanner( char key ) {
             memset( confirm, 0, MAX_PASSWORD_LENGTH );
             state = STATE_TIMEBOMB_READY_CONFRIM;
         }
+        displayPrint( state );
     }
     return state;
 }
@@ -190,12 +231,12 @@ int keyboardScanner( char key ) {
 void setup() {
     lcd.init();
     lcd.backlight();
+    pinMode(SOUND_MODULE, OUTPUT);
     Serial.begin(9600);
     Serial.println("Ready to BOMB");
+    displayPrint(state);
 }
 
 void loop() {
-    state = keyboardScanner( keypad.getKey() );
-    displayPrint( state );
-    delay(100);
+    keyboardScanner( keypad.getKey() );
 }
