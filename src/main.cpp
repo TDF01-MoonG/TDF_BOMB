@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <Keypad.h>
 #include <LiquidCrystal_I2C.h>
+#include <TM1637Display.h>
 
 #define STATE_MAIN 1
 // #define STATE_OPTION 1
@@ -26,6 +27,20 @@
 
 #define SOUND_MODULE 4
 
+// TM1637Display Setting ============================================================
+const uint8_t SEG_DONE[] = {
+	SEG_B | SEG_C | SEG_D | SEG_E | SEG_G,           // d
+	SEG_A | SEG_B | SEG_C | SEG_D | SEG_E | SEG_F,   // O
+	SEG_C | SEG_E | SEG_G,                           // n
+	SEG_A | SEG_D | SEG_E | SEG_F | SEG_G            // E
+	};
+
+TM1637Display display(CLK, DIO);
+uint8_t data[] = { 0xff, 0xff, 0xff, 0xff };
+uint8_t blank[] = { 0x00, 0x00, 0x00, 0x00 };
+
+// ===================================================================================
+
 // KeyPad Setting ====================================================================
 const byte rows = 4; //four rows
 const byte cols = 4; //three columns
@@ -40,13 +55,20 @@ byte colPins[cols] = {5, 6, 7, 8}; //connect to the column pinouts of the keypad
 Keypad keypad = Keypad( makeKeymap(keys), rowPins, colPins, rows, cols );
 // ===================================================================================
 
+// LCD Setting =======================================================================
 LiquidCrystal_I2C lcd(LCD_MODULE,16,2);
+// ===================================================================================
 
-static int state = STATE_MAIN;
-static unsigned char time[MAX_TIME_LENGTH];
-static char password[MAX_PASSWORD_LENGTH] = {'-','-','-','-','-','-'};
-static char clear_password[MAX_PASSWORD_LENGTH] = {'-','-','-','-','-','-'};
-static char confirm[MAX_PASSWORD_LENGTH] = {'-','-','-','-','-','-'};
+int state = STATE_MAIN;
+unsigned char time[MAX_TIME_LENGTH];
+char password[MAX_PASSWORD_LENGTH] = {'-','-','-','-','-','-'};
+char clear_password[MAX_PASSWORD_LENGTH] = {'-','-','-','-','-','-'};
+char confirm[MAX_PASSWORD_LENGTH] = {'-','-','-','-','-','-'};
+
+long second = 0;
+long currentTime = 0;
+
+boolean isActiveTimer = false;
 
 void resetState() {
     memset(time, 0, MAX_TIME_LENGTH);
@@ -230,6 +252,8 @@ void displayPrint() {
             delay(1000);
             noTone(SOUND_MODULE);
             state = STATE_TIMEBOMB_RUN_BOMB;
+            currentTime = millis();
+            isActiveTimer = true;
             displayPrint();
             break;
         }
@@ -343,10 +367,39 @@ int keyboardScanner( char key ) {
     return state;
 }
 
+void timeDisplay() {
+    static int speed = 1000;
+    static int degree = 2;
+    static int step = 0;
+    static int stepBuffer = 0;
+    second = (millis() - currentTime) / (speed/degree);
+    stepBuffer = second % 2;
+    Serial.println( "stepBuffer : " + (String)stepBuffer + ", millis() : " + millis() + ", second : " + (String)second);
+    if ( stepBuffer == 1 && step == 0 ) {
+	    display.showNumberDecEx(second, 0xff, true);
+        tone(SOUND_MODULE, 5000);
+        delay(100);
+        noTone(SOUND_MODULE);
+        step = 1;
+    } else if ( stepBuffer == 0 && step == 1 ){
+	    display.showNumberDecEx(second, 0, true);
+        step = 0;
+    }
+    // display.setSegments(data);
+}
+
 void setup() {
     lcd.init();
     lcd.backlight();
     pinMode(SOUND_MODULE, OUTPUT);
+    display.setBrightness(0x0f);
+    
+    data[0] = display.encodeDigit(0);
+    data[1] = display.encodeDigit(0);
+    data[2] = display.encodeDigit(0);
+    data[3] = display.encodeDigit(0);
+    display.setSegments(data);
+
     Serial.begin(9600);
     Serial.println("Ready to BOMB");
     displayPrint();
@@ -354,4 +407,7 @@ void setup() {
 
 void loop() {
     keyboardScanner( keypad.getKey() );
+    if ( isActiveTimer ) {
+        timeDisplay();
+    }
 }
