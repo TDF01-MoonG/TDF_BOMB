@@ -68,7 +68,7 @@ char confirm[MAX_PASSWORD_LENGTH] = {'-','-','-','-','-','-'};
 long second = 0;
 long currentTime = 0;
 
-int outputTime = 0;
+int outputTime[] = { 0, 0 };
 
 boolean isActiveTimer = false;
 
@@ -159,11 +159,6 @@ int inputPassword( char key ) {
     return state;
 }
 
-void setTimemer() {
-    outputTime = ((int)((char)time[3])) + ((int)((char)time[2])*10) + ((int)((char)time[1])*100) + ((int)((char)time[0])*1000);
-    display.showNumberDecEx(outputTime, 0xff, true);
-}
-
 int setTime( char key ) {
     static int initTime = 0;
     if ( (int)key > 47 && (int)key < 58 ) {
@@ -177,7 +172,11 @@ int setTime( char key ) {
             ++initTime;
         } else {
             initTime = 0;
-            setTimemer();
+            outputTime[0] = ((int)((char)time[0])*10) + (int)((char)time[1]);
+            outputTime[1] = ((int)((char)time[2])*10) + (int)((char)time[3]);
+            display.showNumberDecEx(outputTime[0], 0, true, 2, 2);
+            display.showNumberDecEx(outputTime[1], (0x80 >> 1), true, 2, 0);
+            //display.setSegments(outputTime);
             return STATE_TIMEBOMB_READY_PASSWORD;
         }
     } else if ( key == '*' ) {
@@ -375,25 +374,28 @@ int keyboardScanner( char key ) {
     return state;
 }
 
+
+
 void timeDisplay() {
     static int speed = 1000;
-    static int degree = 2;
+    static int degree = 1;
     static int step = 0;
     static int stepBuffer = 0;
     second = (millis() - currentTime) / (speed/degree);
     stepBuffer = second % 2;
-    Serial.println( "stepBuffer : " + (String)stepBuffer + ", millis() : " + millis() + ", second : " + (String)second);
+    Serial.println( "stepBuffer : " + (String)stepBuffer + ", millis() : " + millis() + ", second : " + (String)second + 
+    ", out: " + (String)outputTime[0] + " : " + (String)outputTime[1] );
+
     if ( stepBuffer == 1 && step == 0 ) {
-	    display.showNumberDecEx((outputTime - (second/degree)), 0xff, true);
         tone(SOUND_MODULE, 5000);
         delay(100);
         noTone(SOUND_MODULE);
         step = 1;
-    } else if ( stepBuffer == 0 && step == 1 ){
-	    display.showNumberDecEx((outputTime - (second/degree)), 0, true);
+    } else if ( stepBuffer == 0 && step == 1 ) {
         step = 0;
     }
-    // display.setSegments(data);
+    display.showNumberDecEx(outputTime[0], 0, true, 2, 2);
+    display.showNumberDecEx(outputTime[1], (0x80 >> 1), true, 2, 0);
 }
 
 void setup() {
