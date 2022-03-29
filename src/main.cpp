@@ -68,6 +68,8 @@ char confirm[MAX_PASSWORD_LENGTH] = {'-','-','-','-','-','-'};
 long second = 0;
 long currentTime = 0;
 
+int outputTime = 0;
+
 boolean isActiveTimer = false;
 
 void resetState() {
@@ -157,6 +159,11 @@ int inputPassword( char key ) {
     return state;
 }
 
+void setTimemer() {
+    outputTime = ((int)((char)time[3])) + ((int)((char)time[2])*10) + ((int)((char)time[1])*100) + ((int)((char)time[0])*1000);
+    display.showNumberDecEx(outputTime, 0xff, true);
+}
+
 int setTime( char key ) {
     static int initTime = 0;
     if ( (int)key > 47 && (int)key < 58 ) {
@@ -170,6 +177,7 @@ int setTime( char key ) {
             ++initTime;
         } else {
             initTime = 0;
+            setTimemer();
             return STATE_TIMEBOMB_READY_PASSWORD;
         }
     } else if ( key == '*' ) {
@@ -376,13 +384,13 @@ void timeDisplay() {
     stepBuffer = second % 2;
     Serial.println( "stepBuffer : " + (String)stepBuffer + ", millis() : " + millis() + ", second : " + (String)second);
     if ( stepBuffer == 1 && step == 0 ) {
-	    display.showNumberDecEx(second, 0xff, true);
+	    display.showNumberDecEx((outputTime - (second/degree)), 0xff, true);
         tone(SOUND_MODULE, 5000);
         delay(100);
         noTone(SOUND_MODULE);
         step = 1;
     } else if ( stepBuffer == 0 && step == 1 ){
-	    display.showNumberDecEx(second, 0, true);
+	    display.showNumberDecEx((outputTime - (second/degree)), 0, true);
         step = 0;
     }
     // display.setSegments(data);
